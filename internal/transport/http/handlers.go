@@ -145,8 +145,8 @@ type metricsResp struct {
 	Buckets []metricsBucket `json:"buckets"`
 }
 
-const defaultWindowSeconds = int64(24 * 60 * 60)  // last 24h default
-const maxWindowSeconds = int64(90 * 24 * 60 * 60) // cap at 90 days (guardrail)
+const defaultWindowSeconds = int64(24 * 60 * 60)  // 24h
+const maxWindowSeconds = int64(90 * 24 * 60 * 60) // 90d cap
 
 func (d *ServerDeps) HandleGetMetrics(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -195,7 +195,7 @@ func (d *ServerDeps) HandleGetMetrics(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// guardrail: cap excessively large ranges
+	// guardrail: cap large ranges
 	if to-from > maxWindowSeconds {
 		from = to - maxWindowSeconds
 	}
@@ -209,6 +209,8 @@ func (d *ServerDeps) HandleGetMetrics(w http.ResponseWriter, r *http.Request) {
 	if channel != "" {
 		chPtr = &channel
 	}
+
+	log.Printf("[api] GET /metrics event_name=%q channel=%q from=%d to=%d group_by=%q", eventName, channel, from, to, groupBy)
 
 	ctx := r.Context()
 	tot, err := d.DB.QueryTotals(ctx, evPtr, from, to, chPtr)
@@ -229,13 +231,16 @@ func (d *ServerDeps) HandleGetMetrics(w http.ResponseWriter, r *http.Request) {
 		for _, b := range bs {
 			resp.Buckets = append(resp.Buckets, metricsBucket{BucketStart: b.BucketStart, Count: b.Count, UniqueUsers: b.UniqueUsers})
 		}
+		log.Printf("[api] METRICS result: totals={count:%d uniq:%d} buckets=%d", tot.Count, tot.UniqueUsers, len(resp.Buckets))
+	} else {
+		log.Printf("[api] METRICS result: totals={count:%d uniq:%d}", tot.Count, tot.UniqueUsers)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-// --- Serve OpenAPI (convenience) ---
+// --- Serve OpenAPI ---
 
 func (d *ServerDeps) HandleOpenAPI(w http.ResponseWriter, r *http.Request) {
 	wd, _ := os.Getwd()
@@ -247,6 +252,7 @@ func (d *ServerDeps) HandleOpenAPI(w http.ResponseWriter, r *http.Request) {
 
 func (d *ServerDeps) Router() http.Handler {
 	mux := http.NewServeMux()
+
 	mux.HandleFunc("/healthz", d.HandleHealthz)
 	mux.HandleFunc("/readyz", d.HandleReadyz)
 	mux.HandleFunc("/openapi.yaml", d.HandleOpenAPI)
