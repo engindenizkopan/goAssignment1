@@ -1,0 +1,61 @@
+openapi: 3.1.0
+info:
+  title: Events Ingestion & Metrics API
+  version: 0.2.0
+paths:
+  /metrics:
+    get:
+      summary: Query metrics
+      description: >
+        Returns totals (and optionally daily buckets) for events.
+        All filters are optional. If `event_name` is omitted, aggregates across all event types.
+        If `from`/`to` are omitted, defaults to a rolling 24h window ending at now (UTC).
+      parameters:
+        - in: query
+          name: event_name
+          schema: { type: string }
+          required: false
+          description: Filter by exact event name. If omitted, all events are included.
+        - in: query
+          name: from
+          schema: { type: integer, format: int64, minimum: 0 }
+          required: false
+          description: Epoch seconds (inclusive). If omitted with `to`, defaults to `now - 24h`.
+        - in: query
+          name: to
+          schema: { type: integer, format: int64, minimum: 0 }
+          required: false
+          description: Epoch seconds (inclusive). If omitted with `from`, defaults to `now`.
+        - in: query
+          name: group_by
+          schema:
+            type: string
+            enum: [day]
+          required: false
+          description: When set to `day`, includes daily buckets.
+        - in: query
+          name: channel
+          schema: { type: string }
+          required: false
+          description: Optional channel filter.
+      responses:
+        '200':
+          description: Metrics response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totals:
+                    type: object
+                    properties:
+                      count: { type: integer, format: int64 }
+                      unique_users: { type: integer, format: int64 }
+                  buckets:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        bucket_start: { type: integer, format: int64 }
+                        count: { type: integer, format: int64 }
+                        unique_users: { type: integer, format: int64 }
